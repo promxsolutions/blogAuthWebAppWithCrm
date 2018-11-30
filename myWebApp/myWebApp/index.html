@@ -1,0 +1,128 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+   <meta charset="utf-8" />
+   <title>My Web App</title>
+   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+
+   <script src="https://secure.aadcdn.microsoftonline-p.com/lib/1.0.0/js/adal.js"></script>
+
+   <script>
+      "use strict";
+
+      // ===== Set the variables =====
+      var organizationURI = "https://myCRM.crm4.dynamics.com"; //The CRM URL
+      var tenant = "00000000-0000-0000-0000-000000000000"; //The name of the Azure AD organization you use
+      var clientId = "00000000-0000-0000-0000-000000000000"; //The ClientId you got when you registered the application
+      var pageUrl = "http://localhost:10202/index.html"; //The URL of this page in your development environment when debugging.
+
+      // User variables
+      var user, authContext, message;
+
+      // Buttons
+      var LoginButton, LogoutButton, GetWhoAmIButton;
+
+      // Label
+      var OutputText, OutputUser;
+
+      // ===== Configuration data for AuthenticationContext =====
+      var endpoints = {
+         orgUri: organizationURI
+      };
+
+      window.config = {
+         tenant: tenant,
+         clientId: clientId,
+         postLogoutRedirectUri: pageUrl,
+         endpoints: endpoints,
+         cacheLocation: 'localStorage', // enable this for IE, as sessionStorage does not work for localhost.
+      };
+
+      // ===== Main =====
+      document.onreadystatechange = function () {
+         if (document.readyState == "complete") {
+
+            //Set DOM elements referenced by scripts
+            LoginButton = document.getElementById("LoginButton");
+            LogoutButton = document.getElementById("LogoutButton");
+            GetWhoAmIButton = document.getElementById("GetWhoAmIButton");
+            OutputText = document.getElementById("WhoAmIText");
+            OutputUser = document.getElementById("UserText");
+
+            //Event handlers on DOM elements
+            LoginButton.addEventListener("click", Login);
+            LogoutButton.addEventListener("click", Logout);
+            GetWhoAmIButton.addEventListener("click", GetToken);
+
+            //call authentication function
+            authenticate();
+
+            // Return the user name profile
+            if (user) {
+               OutputUser.textContent = "The user name: " + user.profile.name;
+            }
+         }
+      }
+
+      // Function that manages authentication
+      function authenticate() {
+         //OAuth context
+         authContext = new AuthenticationContext(config);
+         // Check For & Handle Redirect From AAD After Login
+         var isCallback = authContext.isCallback(window.location.hash);
+         if (isCallback) {
+            authContext.handleWindowCallback();
+         }
+         var loginError = authContext.getLoginError();
+         if (isCallback && !loginError) {
+            window.location = authContext._getItem(authContext.CONSTANTS.STORAGE.LOGIN_REQUEST);
+         }
+         user = authContext.getCachedUser();
+      }
+
+      function GetToken() {
+         authContext.acquireToken(organizationURI, retrieveWhoAmI)
+      }
+
+
+      //Function that retrieves the WhoAmI
+      function retrieveWhoAmI(error, token) {
+         var req = new XMLHttpRequest()
+         req.open("GET", encodeURI(organizationURI + "/api/data/v9.0/WhoAmI"), true);
+         //Set Bearer token
+         req.setRequestHeader("Authorization", "Bearer " + token);
+         req.setRequestHeader("Accept", "application/json");
+         req.setRequestHeader("Content-Type", "application/json; charset=utf-8");
+         req.setRequestHeader("OData-MaxVersion", "4.0");
+         req.setRequestHeader("OData-Version", "4.0");
+         req.onreadystatechange = function () {
+            if (this.readyState == 4) {// complete
+               req.onreadystatechange = null;
+               if (this.status == 200) {
+                  var userId = JSON.parse(this.response).UserId;
+                  OutputText.textContent = "The User Id: " + userId;
+               }
+            }
+         };
+         req.send();
+      }
+
+      function Login() {
+         authContext.login();
+      }
+
+      function Logout() {
+         authContext.logOut();
+      }
+   </script>
+</head>
+<body>
+   <button id="LoginButton">Login</button>
+   <button id="LogoutButton">Logout</button>
+   <br />
+   <p id="UserText"></p>
+   <br />
+   <button id="GetWhoAmIButton">Get Who Am I</button>
+   <p id="WhoAmIText"></p>
+</body>
+</html>
